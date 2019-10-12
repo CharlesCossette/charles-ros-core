@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package>
+  <name>lane_following_PP</name>
+  <version>1.0.0</version>
+  <description>Lane following using a Pure Pursuit controller</description>
+
+  <maintainer email="charles.cossette@mail.mcgill.ca">Charles Cossette</maintainer>
+  <license>GPLv3</license>
+
+  <buildtool_depend>catkin</buildtool_depend> 
+</package>
