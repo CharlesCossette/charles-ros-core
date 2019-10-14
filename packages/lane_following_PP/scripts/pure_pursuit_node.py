@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import rospy
 # Import the different message structures that we will use.
-from duckietown_msgs.msg import SegmentList, Twist2DStamped, LanePose, WheelsCmdStamped, BoolStamped
+from duckietown_msgs.msg import Segment, SegmentList, Twist2DStamped, LanePose, WheelsCmdStamped, BoolStamped
 import time
 import numpy as np
 
@@ -9,10 +9,14 @@ class purePursuit(object):
     # ##########################################################################
     # ############################## CONSTRUCTOR ############################# #
     # ##########################################################################
-    def __init__(self)
+    def __init__(self):
+
+        self.node_name = rospy.get_name()
+
         # Publications
         self.pub_car_cmd = rospy.Publisher("~car_cmd", Twist2DStamped, queue_size=1)
         self.pub_radius_limit = rospy.Publisher("~radius_limit", BoolStamped, queue_size=1)
+        self.pub_actuator_limits_received = rospy.Publisher("~actuator_limits_received", BoolStamped, queue_size=1)
 
         # Subscriptions
        # self.sub_lane_reading = rospy.Subscriber("~lane_pose", LanePose, self.PoseHandling, "lane_filter", queue_size=1) # Need to build callback. Might not be necessary
@@ -27,7 +31,7 @@ class purePursuit(object):
     # ##########################################################################
     # ######################### MAIN CONTROL FUNCTION ######################## #
     # ##########################################################################
-    def updateCommands(self, segListFilteredMsg)
+    def updateCommands(self, segListFilteredMsg):
         v = 0.5
         omega = 0
 
@@ -64,20 +68,15 @@ class purePursuit(object):
         rospy.loginfo("[%s] Shutting down..." % self.node_name)
 
         # Stop listening
-        self.sub_lane_reading.unregister()
-        self.sub_obstacle_avoidance_pose.unregister()
-        self.sub_obstacle_detected.unregister()
-        self.sub_intersection_navigation_pose.unregister()
         self.sub_wheels_cmd_executed.unregister()
         self.sub_actuator_limits.unregister()
-        self.sub_switch.unregister()
-        self.sub_fsm_mode.unregister()
+
 
         # Send stop command
         car_control_msg = Twist2DStamped()
         car_control_msg.v = 0.0
         car_control_msg.omega = 0.0
-        self.publishCmd(car_control_msg)
+        self.pub_car_cmd.publish(car_control_msg)
 
         rospy.sleep(0.5)    #To make sure that it gets published.
         rospy.loginfo("[%s] Shutdown" %self.node_name)
