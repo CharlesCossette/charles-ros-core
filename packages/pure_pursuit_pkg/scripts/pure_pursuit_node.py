@@ -11,7 +11,7 @@ class pure_pursuit(object):
     # ############################## CONSTRUCTOR ############################# #
     # ##########################################################################
     def __init__(self):
-
+        np.set_printoptions(precision=2)
         self.node_name = rospy.get_name()
 
         # Publications
@@ -34,28 +34,91 @@ class pure_pursuit(object):
     def updateCommands(self, segListMsg):
         v_bar = 0.3
         omega = 0
-        L = 0.1 # Look-ahead distance
-        L_tol = 0.05 # tolerance on segments which are in lookahead distance.
+        projDist = 0.25 # Distance to project forward along tangent
+        lanewidth = 0.7
 
-        segAvgx = 0
-        segAvgy = 0
-        segnum = 0
+        whiteAvgX1 = 0
+        whiteAvgY1 = 0
+        yellowAvgX1 = 0
+        yellowAvgY1 = 0
+        whiteAvgX2 = 0
+        whiteAvgY2 = 0
+        yellowAvgX2 = 0
+        yellowAvgY2 = 0
+        nYellow = 0
+        nWhite = 0
+        segAvgWhite = Segment()
+        segAvgYellow = Segment()
+        segAvg = Segment()
+        # Take an average of all the white and yellow segments.
+        # Warning: Direction of the points matters...possible to get two segments to "cancel out" when averaging
         for segment in segListMsg.segments:
-            segx = (segment.points[0].x + segment.points[1].x)/2
-            segy = (segment.points[0].y + segment.points[1].y)/2
-            segdist = math.sqrt(segx ** 2 + segy ** 2)
-            if (segment.color == segment.YELLOW): # Then this segment is near our look-ahead distance.
-                segAvgx = segAvgx + segx
-                segAvgy = segAvgy + segy
-                segnum = segnum + 1
-        
-        if segnum != 0:
-            segAvgx = segAvgx/segnum
-            segAvgy = segAvgy/segnum
-            L = math.sqrt(segAvgx ** 2 + segAvgy ** 2)
-            sinAlpha = segAvgy
-            omega = 1.5*2*v_bar*sinAlpha/L
+            # Check direction. To make sure segments are always points ``away'' from vehicle.
+            dist1 = math.sqrt(segment.points[0].x ** 2 + segment.points[0].y ** 2)
+            dist2 = math.sqrt(segment.points[1].x ** 2 + segment.points[1].y ** 2)
+            if dist2 >= dist1:
+                i1 = 0
+                i2 = 1
+            else:
+                i1 = 1
+                i2 = 0
+
+            if (segment.color == segment.WHITE): 
+                whiteAvgX1 = whiteAvgX1 + segment.points[i1].x
+                whiteAvgY1 = whiteAvgY1 + segment.points[i1].y
+                whiteAvgX2 = whiteAvgX2 + segment.points[i2].x
+                whiteAvgY2 = whiteAvgY2 + segment.points[i2].y
+                nWhite = nWhite + 1
+            elif (segment.color == segment.YELLOW):
+                yellowAvgX1 = yellowAvgX1 + segment.points[i1].x
+                yellowAvgY1 = yellowAvgY1 + segment.points[i1].y
+                yellowAvgX2 = yellowAvgX2 + segment.points[i2].x
+                yellowAvgY2 = yellowAvgY2 + segment.points[i2].y
+                nYellow = nYellow + 1
+        if nWhite != 0:
+            segAvgWhite.points[0].x = whiteAvgX1/nWhite
+            segAvgWhite.points[0].y = whiteAvgY1/nWhite
+            segAvgWhite.points[1].x = whiteAvgX2/nWhite
+            segAvgWhite.points[1].y = whiteAvgY2/nWhite
+        if nYellow != 0:
+            segAvgYellow.points[0].x = yellowAvgX1/nYellow
+            segAvgYellow.points[0].y = yellowAvgY1/nYellow
+            segAvgYellow.points[1].x = yellowAvgX2/nYellow
+            segAvgYellow.points[1].y = yellowAvgY2/nYellow 
+
+        # Now that we have the ``average'' white and yellow segments, find overall average segment.
+        if nWhite != 0 and nYellow != 0:
+            segAvg.points[0].x = (segAvgWhite.points[0].x + segAvgYellow.points[0].x)/2
+            segAvg.points[0].y = (segAvgWhite.points[0].y + segAvgYellow.points[0].y)/2
+            segAvg.points[1].x = (segAvgWhite.points[1].x + segAvgYellow.points[1].x)/2 
+            segAvg.points[1].y = (segAvgWhite.points[1].y + segAvgYellow.points[1].y)/2
+        elif nWhite != 0 and nYellow == 0:
+            # White lines only
+            # Offset to the left by laneWidth/2
+            segAvg = segAvgWhite
+            segAvg.points[0].y = segAvg.points[0].y + lanewidth/2
+            segAvg.points[1].y = segAvg.points[1].y + lanewidth/2
+        elif nWhite == 0 and nYellow != 0:
+            # Yellow lines only
+            # Offset to the right by laneWidth/2
+            segAvg = segAvgYellow
+            segAvg.points[0].y = segAvg.points[0].y - lanewidth/2
+            segAvg.points[1].y = segAvg.points[1].y - lanewidth/2
+            
+        # Project Forward
+        segPos = np.array([((segAvg.points[0].x + segAvg.points[1].x)/2),((segAvg.points[0].y + segAvg.points[1].y)/2)])
+        segVec = np.array([segAvg.points[1].x,segAvg.points[1].y]) - np.array([segAvg.points[0].x,segAvg.points[0].y])
+        mag = np.linalg.norm(segVec)
+        if mag != 0:
+            segVec = segVec/mag
+        desPos = segPos + segVec * projDist
+
+        if (nWhite + nYellow)!= 0:
+            L = np.linalg.norm(desPos)
+            sinAlpha = desPos[1]
+            omega = 3*2*v_bar*sinAlpha/L
         else:
+            L = 0
             omega = 0
 
         # Publish the command
@@ -63,7 +126,7 @@ class pure_pursuit(object):
         car_control_msg.v = v_bar
         car_control_msg.omega = omega
         self.pub_car_cmd.publish(car_control_msg)
-        print("Angular Velocity: ", omega,"  L: ", L)
+        print("Angular Velocity: %.2f" % omega,"L: %.2f" % L, "nY: %d" % nYellow, "nW: %d" % nWhite, "segPos: [%.2f , %.2f]" % (segPos[0], segPos[1]), "segVec: [%.2f , %.2f]" % (segVec[0], segVec[1])) 
 
 
 
