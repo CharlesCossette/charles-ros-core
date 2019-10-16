@@ -1,5 +1,5 @@
 # parameters
-ARG REPO_NAME="charles-ros-core"
+ARG REPO_NAME="<REPO_NAME_HERE>"
 
 # ==================================================>
 # ==> Do not change this code
