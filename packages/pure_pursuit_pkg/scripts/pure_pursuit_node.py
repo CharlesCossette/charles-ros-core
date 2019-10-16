@@ -35,7 +35,8 @@ class pure_pursuit(object):
         v_bar = 0.3
         omega = 0
         projDist = 0.25 # Distance to project forward along tangent
-        lanewidth = 0.7
+        lanewi
+    # if a safe shutdown is necessarydth = 0.7
 
         whiteAvgX1 = 0
         whiteAvgY1 = 0
@@ -64,12 +65,14 @@ class pure_pursuit(object):
                 i2 = 0
 
             if (segment.color == segment.WHITE): 
+                # Average the white segments together
                 whiteAvgX1 = whiteAvgX1 + segment.points[i1].x
                 whiteAvgY1 = whiteAvgY1 + segment.points[i1].y
                 whiteAvgX2 = whiteAvgX2 + segment.points[i2].x
                 whiteAvgY2 = whiteAvgY2 + segment.points[i2].y
                 nWhite = nWhite + 1
             elif (segment.color == segment.YELLOW):
+                # Average the yellow segments together
                 yellowAvgX1 = yellowAvgX1 + segment.points[i1].x
                 yellowAvgY1 = yellowAvgY1 + segment.points[i1].y
                 yellowAvgX2 = yellowAvgX2 + segment.points[i2].x
@@ -105,14 +108,18 @@ class pure_pursuit(object):
             segAvg.points[0].y = segAvg.points[0].y - lanewidth/2
             segAvg.points[1].y = segAvg.points[1].y - lanewidth/2
             
-        # Project Forward
+        # Calculate midpoint direction vector of overall average segment
         segPos = np.array([((segAvg.points[0].x + segAvg.points[1].x)/2),((segAvg.points[0].y + segAvg.points[1].y)/2)])
         segVec = np.array([segAvg.points[1].x,segAvg.points[1].y]) - np.array([segAvg.points[0].x,segAvg.points[0].y])
         mag = np.linalg.norm(segVec)
         if mag != 0:
+            # Normalize direction vector of segment
             segVec = segVec/mag
+
+        # Project forward to create desired point
         desPos = segPos + segVec * projDist
 
+        # If lines are detected, calculate pure pursuit control effort. Otherwise, go straight.
         if (nWhite + nYellow)!= 0:
             L = np.linalg.norm(desPos)
             sinAlpha = desPos[1]
@@ -135,7 +142,9 @@ class pure_pursuit(object):
 
 
 
-    # ########################## HOUSEKEEPING FUNCTIONS ##############################
+    # ##########################################################################
+    # ######################## HOUSEKEEPING FUNCTIONS ######################## #
+    # ##########################################################################
     def updateWheelsCmdExecuted(self, msg_wheels_cmd):
         self.wheels_cmd_executed = msg_wheels_cmd
 
@@ -149,7 +158,7 @@ class pure_pursuit(object):
         self.pub_actuator_limits_received.publish(msg_actuator_limits_received)
 
 
-    # ############################# CUSTOM SHUTDOWN ##################################
+    # ############################# CUSTOM SHUTDOWN ############################
     def custom_shutdown(self):
         rospy.loginfo("[%s] Shutting down..." % self.node_name)
 
@@ -171,6 +180,4 @@ class pure_pursuit(object):
 if __name__ == '__main__':
     rospy.init_node('pure_pursuit', anonymous=False)
     pure_pursuit_node = pure_pursuit()
-    # if a safe shutdown is necessary
-    #rospy.on_shutdown(lane_filter_node.onShutdown) 
     rospy.spin()  
